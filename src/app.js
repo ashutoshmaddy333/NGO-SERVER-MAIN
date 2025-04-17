@@ -1,5 +1,7 @@
 const express = require("express")
 const cors = require("cors")
+const path = require('path'); // <-- This line is required
+
 const helmet = require("helmet")
 const rateLimit = require("express-rate-limit")
 const dotenv = require("dotenv")
@@ -9,7 +11,7 @@ dotenv.config() // Load environment variables
 
 // Initialize Express
 const app = express()
-app.use(cors({ origin: "https://ngo-client--three.vercel.app", credentials: true }));
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 
 // Security Middleware
 app.use(helmet()) // Adds various HTTP headers for security
@@ -26,7 +28,7 @@ app.use(limiter)
 // app.use(cors()) // Enable CORS
 app.use(express.json()) // Body parser for JSON
 app.use(express.urlencoded({ extended: true })) // URL-encoded body parser
-
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Import routes
 const authRoutes = require("./routes/authRoutes")
 const listingsRoutes = require("./routes/listingsRoutes")

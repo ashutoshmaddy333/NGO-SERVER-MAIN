@@ -94,6 +94,36 @@ exports.createInterest = async (req, res) => {
   }
 }
 
+// @route   GET /api/interests/check
+exports.checkInterest = async (req, res) => {
+  try {
+    const { listingId, userId } = req.query;
+
+    if (!listingId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "listingId and userId are required"
+      });
+    }
+
+    const interest = await Interest.findOne({
+      listing: listingId,
+      sender: userId
+    });
+
+    res.status(200).json({
+      success: true,
+      hasShownInterest: !!interest
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error checking interest status",
+      error: error.message
+    });
+  }
+};
+
 // @desc    Get received interests
 // @route   GET /api/interests/received
 exports.getReceivedInterests = async (req, res) => {
@@ -117,7 +147,7 @@ exports.getReceivedInterests = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skipIndex)
-      .populate("sender", "username email")
+      .populate("sender", "firstName lastName email phoneNumber city state")
       .populate("listing")
 
     res.status(200).json({
@@ -160,7 +190,8 @@ exports.getSentInterests = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skipIndex)
-      .populate("receiver", "username email")
+      // Using the fields from the first file as they're more comprehensive
+      .populate("receiver", "firstName lastName email")
       .populate("listing")
 
     res.status(200).json({
@@ -237,4 +268,3 @@ exports.respondToInterest = async (req, res) => {
     })
   }
 }
-

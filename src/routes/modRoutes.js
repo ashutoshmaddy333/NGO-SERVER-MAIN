@@ -1,46 +1,33 @@
 const express = require("express")
-const moderatorController = require("../controllers/modController")
-const authMiddleware = require("../middleware/authMiddleware") // Import authMiddleware
-const moderatorMiddleware = require("../middleware/modMiddleware") // Import moderatorMiddleware
-
 const router = express.Router()
+const modController = require("../controllers/modController")
+const { protect, moderator } = require("../middleware/modMiddleware")
+const { upload } = require("../middleware/uploadMiddleware")
 
-// Debugging: Log the imported middleware functions (remove in production)
-console.log("authMiddleware:", authMiddleware)
-console.log("moderatorMiddleware:", moderatorMiddleware)
+// Apply middleware to all routes
+router.use(protect)
+router.use(moderator)
 
-// Apply authentication middleware to all routes in this router
-router.use(authMiddleware.protect) // Use authMiddleware.protect
+// Dashboard route
+router.get("/dashboard", modController.getDashboardStats)
 
-// Profile moderation routes (require both authentication and moderator access)
-router.get("/profiles", moderatorMiddleware.ensureModerator, moderatorController.getProfilesForModeration) // Get profiles for moderation
-router.post("/profiles/approve-reject", moderatorMiddleware.ensureModerator, moderatorController.approveOrRejectProfile) // Approve/reject a profile
-router.post(
-  "/profiles/bulk-approve-reject",
-  moderatorMiddleware.ensureModerator,
-  moderatorController.bulkApproveOrRejectProfiles,
-) // Bulk approve/reject profiles
+// Listings moderation routes
+router.get("/listings", modController.getListingsForModeration)
+router.get("/listings/:id", modController.getListingDetails)
+router.post("/listings/:id/approve", modController.approveListing)
+router.post("/listings/:id/reject", modController.rejectListing)
+router.post("/listings/bulk-action", modController.bulkApproveRejectListings)
 
-// Interest moderation routes (require both authentication and moderator access)
-router.get("/interests", moderatorMiddleware.ensureModerator, moderatorController.getInterests) // Get list of interests
-router.post(
-  "/interests/approve-reject",
-  moderatorMiddleware.ensureModerator,
-  moderatorController.approveOrRejectInterest,
-) // Approve/reject an interest
+// User moderation routes
+router.get("/users", modController.getUsersForModeration)
+router.post("/users/:id/approve", modController.approveUser)
+router.post("/users/:id/reject", modController.rejectUser)
+router.post("/users/bulk-action", modController.bulkApproveRejectUsers)
 
-// Add new routes for listing moderation
-// Listing moderation routes
-router.get("/listings", moderatorMiddleware.ensureModerator, moderatorController.getListingsForModeration) // Get listings for moderation
-router.post("/listings/approve-reject", moderatorMiddleware.ensureModerator, moderatorController.approveOrRejectListing) // Approve/reject a listing
-router.post(
-  "/listings/bulk-approve-reject",
-  moderatorMiddleware.ensureModerator,
-  moderatorController.bulkApproveOrRejectListings,
-) // Bulk approve/reject listings
-
-// Add this new route after the bulk-approve-reject route
-router.get("/listings/all-ids", moderatorMiddleware.ensureModerator, moderatorController.getAllListingIds) // Get all listing IDs for bulk operations
+// Interest moderation routes
+router.get("/interests", modController.getInterestsForModeration)
+router.post("/interests/:id/approve", modController.approveInterest)
+router.post("/interests/:id/reject", modController.rejectInterest)
+router.post("/interests/bulk-action", modController.bulkApproveRejectInterests)
 
 module.exports = router
-

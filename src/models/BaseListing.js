@@ -24,8 +24,8 @@ const BaseListing = new mongoose.Schema(
         type: String, // URL to the image
         validate: {
           validator: (v) => {
-            // Basic URL validation
-            return /^https?:\/\/.+/.test(v)
+            // Basic URL validation - combines both versions' validators
+            return /^https?:\/\/.+/.test(v) || v.startsWith("/") // Allow local paths too
           },
           message: (props) => `${props.value} is not a valid URL!`,
         },
@@ -33,8 +33,8 @@ const BaseListing = new mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["active", "inactive", "pending", "expired"],
-      default: "active",
+      enum: ["active", "inactive", "pending", "rejected", "expired"], // Combined enum values
+      default: "pending", // Kept the more restrictive default
     },
     views: {
       type: Number,
@@ -80,10 +80,20 @@ const BaseListing = new mongoose.Schema(
         longitude: Number,
       },
     },
+    moderatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    moderatedAt: {
+      type: Date,
+    },
+    rejectionReason: {
+      type: String,
+    },
   },
   {
     timestamps: true,
-    discriminatorKey: "listingType",
+    discriminatorKey: "__t", // Kept MongoDB's default discriminator key
   },
 )
 
@@ -112,4 +122,3 @@ BaseListing.statics.search = async function (query) {
 }
 
 module.exports = mongoose.model("BaseListing", BaseListing)
-

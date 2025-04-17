@@ -45,6 +45,16 @@ const InterestSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    moderatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    moderatedAt: {
+      type: Date,
+    },
+    rejectionReason: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -64,9 +74,9 @@ InterestSchema.statics.checkExistingInterest = async function (senderId, receive
   })
 }
 
-// Validation to prevent self-interest
+// Validation to prevent self-interest (improved version with null checks)
 InterestSchema.pre("validate", function (next) {
-  if (this.sender.equals(this.receiver)) {
+  if (this.sender && this.receiver && this.sender.equals(this.receiver)) {
     next(new Error("You cannot send an interest to yourself"))
   } else {
     next()
@@ -76,4 +86,3 @@ InterestSchema.pre("validate", function (next) {
 const Interest = mongoose.model("Interest", InterestSchema)
 
 module.exports = Interest
-

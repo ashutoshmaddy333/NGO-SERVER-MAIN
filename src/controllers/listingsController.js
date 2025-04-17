@@ -3,6 +3,9 @@ const ServiceListing = require("../models/ServiceListing")
 const JobListing = require("../models/JobListing")
 const MatrimonyListing = require("../models/MatrimonyListing")
 const express = require("express")
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp'); // For image processing
 
 // Mapping of listing types to their respective models
 const ListingModels = {
@@ -16,49 +19,105 @@ const ListingModels = {
 // @route   POST /api/listings/:type
 exports.createListing = async (req, res) => {
   try {
-    const { type } = req.params
-    const listingModel = ListingModels[type]
+    const { type } = req.params;
+    const listingModel = ListingModels[type];
 
     if (!listingModel) {
       return res.status(400).json({
         success: false,
         message: "Invalid listing type",
-      })
+      });
     }
 
-    // Add user from authentication middleware
-    req.body.user = req.user.id
+    // Process uploaded images
+    const imageUrls = [];
+    const uploadDir = path.join(__dirname, '../uploads');
+    
+    // Create uploads directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
 
-    // Set initial status to pending for moderation
-    req.body.status = "pending"
+    if (req.files && req.files.length > 0) {
+      await Promise.all(
+        req.files.map(async (file) => {
+          try {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            const filename = `img-${uniqueSuffix}${path.extname(file.originalname)}`;
+            const filePath = path.join(uploadDir, filename);
 
-    const listing = new listingModel(req.body)
-    await listing.save()
+            // Process and save image
+            await sharp(file.path)
+              .resize(800, 800, { 
+                fit: 'inside', 
+                withoutEnlargement: true 
+              })
+              .jpeg({ quality: 80 })
+              .toFile(filePath);
 
-    // Create notification for the user about pending approval
-    const Notification = require("../models/Notification")
-    await Notification.createNotification({
+            // Remove temporary file
+            fs.unlinkSync(file.path);
+
+            // Store relative path
+            imageUrls.push(`/uploads/${filename}`);
+          } catch (fileError) {
+            console.error("Error processing file:", fileError);
+            // Skip this file but continue with others
+          }
+        })
+      );
+    }
+
+    // Create listing
+    const listing = await listingModel.create({
+      ...req.body,
       user: req.user.id,
-      type: "listing_created",
-      content: `Your ${type} listing has been created and is pending approval`,
-      relatedEntity: {
-        entityId: listing._id,
-        type: "Listing",
-      },
-    })
+      images: imageUrls,
+      status: "pending"
+    });
+
+    // Create notification
+    // await Notification.createNotification({
+    //   user: req.user.id,
+    //   type: "listing_created",
+    //   content: `Your ${type} listing has been created`,
+    //   relatedEntity: {
+    //     entityId: listing._id,
+    //     type: "Listing",
+    //   },
+    // });
 
     res.status(201).json({
       success: true,
-      data: listing,
-    })
+      data: {
+        ...listing.toObject(),
+        images: imageUrls.map(img => `${process.env.BASE_URL || 'http://localhost:3000'}${img}`)
+      }
+    });
+
   } catch (error) {
+    console.error("Error creating listing:", error);
+    
+    // Clean up uploaded files if error occurred
+    if (req.files) {
+      req.files.forEach(file => {
+        try {
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+          }
+        } catch (cleanupError) {
+          console.error("Error cleaning up files:", cleanupError);
+        }
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Error creating listing",
-      error: error.message,
-    })
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
   }
-}
+};
 
 // @desc    Get all listings of a specific type
 // @route   GET /api/listings/:type
@@ -154,6 +213,7 @@ exports.getSingleListing = async (req, res) => {
         message: "Listing not found",
       })
     }
+console.log("Listing data-->",listing);
 
     res.status(200).json({
       success: true,
@@ -306,7 +366,7 @@ exports.searchListings = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Search query is required",
-      })
+      }) 
     }
 
     // If specific type is provided, search only that type

@@ -1,16 +1,10 @@
 const mongoose = require("mongoose")
-const bcrypt = require("bcryptjs")
+const bcrypt = require("bcryptjs") // Make sure we're using bcryptjs, not bcrypt
 const cities = require("./Cities")
 const { validate } = require("./BaseListing")
 
 const UserSchema = new mongoose.Schema(
   {
-    // username:{
-    // type: String,
-    // required: [true, 'Username is required'],
-    // unique: true,
-    // trim: true,
-    // },
     firstName: {
       type: String,
       required: [true, "First name is required"],
@@ -80,43 +74,83 @@ const UserSchema = new mongoose.Schema(
         message: () => "Passwords do not match. Please try again.",
       },
     },
+    status: {
+      type: String,
+      enum: ["active", "inactive", "pending", "rejected", "suspended"],
+      default: "active",
+    },
+    moderatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    moderatedAt: {
+      type: Date,
+    },
+    rejectionReason: {
+      type: String,
+    },
+    otp: {
+      code: {
+        type: String,
+      },
+      expiresAt: {
+        type: Date,
+      },
+    },
+    isVerified: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
-    timestamps: true, // Enables `createdAt` and `updatedAt`
+    timestamps: true,
   },
 )
 
-// 🔹 Remove confirmPassword before saving
+// Password hashing middleware
 UserSchema.pre("save", async function (next) {
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified("password")) return next()
 
   try {
+    // Generate a salt
     const salt = await bcrypt.genSalt(10)
+
+    // Hash the password along with our new salt
     this.password = await bcrypt.hash(this.password, salt)
+
+    // Clear the confirmPassword field
+    this.confirmPassword = undefined
+
     next()
   } catch (error) {
+    console.error("Password hashing error:", error)
     next(error)
   }
 })
 
-// 🔹 Method to check password validity
-// UserSchema.methods.isValidPassword = async function (confirm) {
-//    const isMatch = await bcrypt.compare(confirm, this.password);
-//    return isMatch;
+// Method to check password validity
+UserSchema.methods.isValidPassword = async function (password) {
+  try {
+    // Use bcryptjs to compare the provided password with the hashed password
+    return await bcrypt.compare(password, this.password)
+  } catch (error) {
+    console.error("Password validation error:", error)
+    return false
+  }
+}
 
-// };
-
-// 🔹 Method to generate OTP
+// Method to generate OTP
 UserSchema.methods.generateOTP = function () {
   const otp = Math.floor(100000 + Math.random() * 900000).toString()
   this.otp = {
     code: otp,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiry
   }
   return otp
 }
 
-// 🔹 Method to verify OTP
+// Method to verify OTP
 UserSchema.methods.verifyOTP = async function (otpCode) {
   if (!this.otp || !this.otp.code) {
     return { success: false, message: "OTP not found." }
@@ -132,7 +166,7 @@ UserSchema.methods.verifyOTP = async function (otpCode) {
 
   // OTP is valid, mark the user as verified
   this.isVerified = true
-  this.set("otp", undefined) // Remove OTP
+  this.otp = undefined // Remove OTP
   await this.save() // Save the changes
 
   return { success: true, message: "OTP verified successfully." }
@@ -141,4 +175,3 @@ UserSchema.methods.verifyOTP = async function (otpCode) {
 const User = mongoose.model("User", UserSchema)
 
 module.exports = User
-
